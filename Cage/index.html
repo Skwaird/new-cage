@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cosmos — Pick a world</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --space:#04060f;
+    --space-2:#0a0f22;
+    --ink:#eef2ff;
+    --muted:#8590b8;
+    --accent:#ffb547;
+    --accent-2:#ff6b6b;
+    --line:rgba(255,255,255,.08);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden}
+  body{
+    font-family:'Space Grotesk',sans-serif;
+    background:var(--space);color:var(--ink);
+    line-height:1.6;
+  }
+
+  /* Starfield */
+  #stars{position:fixed;inset:0;z-index:0;pointer-events:none}
+  .star{position:absolute;width:2px;height:2px;background:#fff;border-radius:50%;opacity:.7}
+  @keyframes twinkle{0%,100%{opacity:.2}50%{opacity:1}}
+  .star.s2{width:1px;height:1px}
+  .star.s3{width:3px;height:3px;box-shadow:0 0 6px #fff}
+
+  /* ========== LAUNCH SCREEN ========== */
+  #launch{
+    position:fixed;inset:0;z-index:10;
+    display:grid;place-items:center;
+    transition:opacity .6s ease;
+    overflow:auto;
+  }
+  #launch.gone{opacity:0;pointer-events:none}
+
+  .launch-inner{text-align:center;position:relative;padding:40px 20px}
+  .launch-title{
+    font-family:'Fraunces',serif;font-weight:900;
+    font-size:clamp(32px,6vw,72px);letter-spacing:-.03em;
+    margin-bottom:8px;line-height:1.05;
+  }
+  .launch-title .accent{
+    background:linear-gradient(120deg,var(--accent),var(--accent-2));
+    -webkit-background-clip:text;background-clip:text;color:transparent;font-style:italic;
+  }
+  .launch-sub{color:var(--muted);font-size:15px;margin-bottom:40px}
+  .launch-sub b{color:var(--ink)}
+
+  #rocket-wrap{
+    position:relative;width:120px;height:240px;margin:0 auto;
+    cursor:pointer;
+    transition:transform 1.3s cubic-bezier(.55,0,.85,.3), opacity .8s ease .4s;
+    animation:float 3s ease-in-out infinite;
+  }
+  #rocket-wrap:hover{animation-play-state:paused}
+  #rocket-wrap:hover .rocket-flame{opacity:1;transform:translateX(-50%) scaleY(1.4)}
+  @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+
+  #rocket-wrap.blast{transform:translateY(-120vh);animation:none}
+  #rocket-wrap.blast .rocket-flame{opacity:1;transform:translateX(-50%) scaleY(2.5)}
+
+  .rocket-svg{width:100%;height:100%;display:block;filter:drop-shadow(0 20px 40px rgba(255,107,107,.25))}
+
+  .rocket-flame{
+    position:absolute;bottom:42px;left:50%;
+    transform:translateX(-50%) scaleY(0);
+    transform-origin:top center;
+    width:36px;height:70px;
+    background:radial-gradient(ellipse at top, #fff 0%, #ffd24d 20%, var(--accent) 45%, var(--accent-2) 70%, transparent 95%);
+    border-radius:50% 50% 50% 50% / 20% 20% 80% 80%;
+    opacity:0;transition:transform .25s, opacity .25s;
+    filter:blur(2px);
+  }
+  .rocket-flame::after{
+    content:"";position:absolute;inset:0;
+    background:radial-gradient(ellipse at top, #fff 0%, transparent 40%);
+    border-radius:inherit;
+  }
+
+  .hint{
+    margin-top:32px;color:var(--muted);font-size:12px;
+    letter-spacing:.15em;text-transform:uppercase;
+    display:inline-flex;align-items:center;gap:10px;
+  }
+  .hint::before,.hint::after{content:"";width:24px;height:1px;background:var(--line)}
+
+  /* Smoke */
+  #smoke-layer{position:fixed;inset:0;z-index:9;pointer-events:none}
+  .smoke{
+    position:absolute;border-radius:50%;
+    background:radial-gradient(circle, rgba(220,225,240,.95) 0%, rgba(180,190,210,.6) 40%, transparent 70%);
+    opacity:0;transform:scale(.2);filter:blur(8px);
+  }
+  .smoke.fire{background:radial-gradient(circle, rgba(255,181,71,.9) 0%, rgba(255,107,107,.6) 40%, transparent 70%)}
+  .smoke.active{animation:smokeExpand 1.6s cubic-bezier(.4,0,.6,1) forwards}
+  @keyframes smokeExpand{
+    0%{opacity:0;transform:scale(.2)}
+    25%{opacity:.9}
+    60%{opacity:1;transform:scale(2.5)}
+    100%{opacity:0;transform:scale(6)}
+  }
+
+  #smoke-wipe{
+    position:fixed;inset:0;z-index:11;pointer-events:none;
+    background:radial-gradient(circle at 50% 80%, #d4d8e6 0%, #9aa0b8 40%, #4a5070 80%, transparent 100%);
+    transform:scale(0);opacity:0;border-radius:50%;
+    transform-origin:50% 80%;
+  }
+  #smoke-wipe.wipe{animation:wipeScreen 1.4s cubic-bezier(.6,0,.4,1) forwards}
+  @keyframes wipeScreen{
+    0%{transform:scale(0);opacity:0}
+    35%{opacity:1;transform:scale(2)}
+    70%{opacity:1;transform:scale(8)}
+    100%{opacity:0;transform:scale(14)}
+  }
+
+  /* ========== SPACE SCREEN ========== */
+  #space-screen{
+    position:fixed;inset:0;z-index:5;
+    opacity:0;pointer-events:none;
+    display:flex;flex-direction:column;
+    transition:opacity .8s ease;
+  }
+  #space-screen.show{opacity:1;pointer-events:auto}
+
+  .space-head{
+    flex:0 0 auto;
+    padding:14px 32px;display:flex;justify-content:space-between;align-items:center;
+    border-bottom:1px solid var(--line);
+  }
+  .brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:17px}
+  .brand-mark{
+    width:32px;height:32px;border-radius:9px;
+    background:linear-gradient(135deg,var(--accent),var(--accent-2));
+    display:grid;place-items:center;font-family:'Fraunces',serif;font-weight:900;
+    color:#1a0d04;font-size:18px;
+  }
+  .space-nav{display:flex;gap:8px;align-items:center;color:var(--muted);font-size:13px}
+  .space-nav button{
+    background:transparent;border:1px solid var(--line);color:var(--ink);
+    width:38px;height:38px;border-radius:50%;cursor:pointer;
+    display:grid;place-items:center;font-size:17px;transition:.2s;
+  }
+  .space-nav button:hover{border-color:var(--accent);color:var(--accent)}
+
+  .wheel-title{flex:0 0 auto;padding:16px 32px 4px}
+  .wheel-title .kicker{color:var(--accent);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.15em;margin-bottom:6px}
+  .wheel-title h1{font-family:'Fraunces',serif;font-size:clamp(24px,3.5vw,38px);font-weight:700;letter-spacing:-.02em}
+  .wheel-title p{color:var(--muted);margin-top:4px;font-size:14px}
+
+  /* Horizontal scroll wheel */
+  .wheel{
+    flex:1 1 0;min-height:0;
+    overflow-x:auto;overflow-y:hidden;
+    scroll-snap-type:x mandatory;
+    display:flex;align-items:stretch;
+    padding: 0 calc(50% - min(260px, 41vw));
+    scrollbar-width:none;
+    mask-image:linear-gradient(to right, transparent 0, #000 8%, #000 92%, transparent 100%);
+  }
+  .wheel::-webkit-scrollbar{display:none}
+  .wheel:hover{cursor:grab}
+
+  .planet-card{
+    flex:0 0 auto;width:min(520px,82vw);
+    scroll-snap-align:center;
+    display:flex;flex-direction:column;
+    padding:16px;position:relative;
+    margin-right:-60px;
+  }
+
+  .planet-visual-wrap{
+    flex:1 1 0;min-height:0;
+    display:grid;place-items:center;
+    position:relative;overflow:hidden;
+  }
+
+  .planet-visual{
+    width:min(240px,50vw,28vh);
+    height:min(240px,50vw,28vh);
+    border-radius:50%;
+    box-shadow:inset -30px -24px 60px rgba(0,0,0,.6), 0 0 60px rgba(0,0,0,.4);
+    transition:transform .5s;
+    position:relative;z-index:2;
+  }
+  .planet-card:hover .planet-visual{transform:scale(1.05)}
+
+  .p-ignis{
+    background:
+      radial-gradient(circle at 30% 25%, #ffb547 0%, transparent 30%),
+      radial-gradient(circle at 70% 60%, #ff3d00 0%, transparent 35%),
+      radial-gradient(circle at 50% 90%, #4a0e00 0%, transparent 50%),
+      linear-gradient(135deg, #ff6b35, #b71c1c);
+  }
+  .p-aquas{
+    background:
+      radial-gradient(circle at 40% 30%, #7ee8fa 0%, transparent 30%),
+      radial-gradient(circle at 70% 70%, #0a4d8c 0%, transparent 40%),
+      linear-gradient(135deg, #2196f3, #0d47a1);
+  }
+  .p-verde{
+    background:
+      radial-gradient(circle at 30% 40%, #76e03f 0%, transparent 30%),
+      radial-gradient(circle at 65% 65%, #1b5e20 0%, transparent 40%),
+      linear-gradient(135deg, #4caf50, #0b3d12);
+  }
+  .p-crystal{
+    background:
+      radial-gradient(circle at 35% 30%, #e0b3ff 0%, transparent 30%),
+      radial-gradient(circle at 70% 60%, #6a1b9a 0%, transparent 40%),
+      linear-gradient(135deg, #9c27b0, #311b92);
+  }
+  .p-frost{
+    background:
+      radial-gradient(circle at 35% 30%, #ffffff 0%, transparent 30%),
+      radial-gradient(circle at 70% 70%, #80deea 0%, transparent 40%),
+      linear-gradient(135deg, #b2ebf2, #4a6fa5);
+  }
+  .p-void{
+    background:
+      radial-gradient(circle at 35% 30%, #4a4a6e 0%, transparent 30%),
+      radial-gradient(circle at 70% 70%, #1a1a2e 0%, transparent 50%),
+      linear-gradient(135deg, #2c2c54, #0a0a1a);
+    box-shadow:inset -30px -24px 60px rgba(0,0,0,.8), 0 0 80px rgba(120,90,255,.3);
+  }
+
+  .planet-rings{
+    position:absolute;top:50%;left:50%;
+    transform:translate(-50%,-50%) rotate(-22deg);
+    width:min(340px,70vw,38vh);
+    height:min(85px,17vw,10vh);
+    border-radius:50%;
+    border:10px solid rgba(255,181,71,.5);
+    border-top-color:transparent;border-bottom-color:rgba(255,181,71,.15);
+    pointer-events:none;z-index:1;
+  }
+  .planet-rings.r2{
+    width:min(300px,62vw,34vh);
+    height:min(75px,15vw,9vh);
+    border-width:6px;
+    border-color:rgba(220,180,255,.45);
+    border-top-color:transparent;border-bottom-color:rgba(220,180,255,.15);
+  }
+
+  .planet-info{
+    flex:0 0 auto;
+    position:relative;z-index:3;
+    max-width:65%;
+    padding-top:12px;
+  }
+  .planet-index{
+    font-family:'Fraunces',serif;font-size:12px;
+    color:var(--accent);font-weight:600;letter-spacing:.1em;margin-bottom:6px;
+  }
+  .planet-name{
+    font-family:'Fraunces',serif;font-size:clamp(26px,4vw,38px);font-weight:700;
+    letter-spacing:-.02em;margin-bottom:6px;line-height:1;
+  }
+  .planet-desc{color:var(--muted);font-size:13px;margin-bottom:14px;max-width:260px}
+  .planet-link{
+    display:inline-flex;align-items:center;gap:8px;
+    padding:10px 20px;border-radius:10px;
+    background:rgba(255,255,255,.06);border:1px solid var(--line);
+    color:var(--ink);text-decoration:none;font-weight:600;font-size:13px;
+    transition:.2s;backdrop-filter:blur(6px);
+  }
+  .planet-link:hover{background:var(--accent);color:#1a0d04;border-color:var(--accent)}
+  .planet-link svg{transition:transform .2s}
+  .planet-link:hover svg{transform:translateX(4px)}
+
+  .wheel-dots{
+    flex:0 0 auto;
+    display:flex;gap:10px;justify-content:center;padding:12px;align-items:center;
+  }
+  .dot{
+    width:8px;height:8px;border-radius:50%;background:var(--line);
+    cursor:pointer;transition:.2s;
+  }
+  .dot.active{width:28px;border-radius:4px;background:var(--accent)}
+
+  @media(max-width:700px){
+    .planet-visual{width:min(180px,50vw,24vh);height:min(180px,50vw,24vh)}
+    .planet-rings{width:min(260px,72vw,34vh);height:min(65px,18vw,8.5vh);border-width:7px}
+    .planet-rings.r2{width:min(230px,64vw,30vh);height:min(58px,16vw,7.5vh);border-width:5px}
+    .planet-name{font-size:26px}
+    .planet-info{max-width:100%}
+    .planet-card{margin-right:0}
+    .space-head,.wheel-title{padding-left:16px;padding-right:16px}
+    .planet-desc{max-width:220px}
+  }
+</style>
+</head>
+<body>
+
+<div id="stars"></div>
+
+<!-- ============ LAUNCH SCREEN ============ -->
+<div id="launch">
+  <div class="launch-inner">
+    <h1 class="launch-title">Begin the <span class="accent">voyage</span>.</h1>
+    <p class="launch-sub">Tap the rocket. We'll do the rest. <b>Six worlds</b> await.</p>
+
+    <div id="rocket-wrap" role="button" tabindex="0" aria-label="Blast off">
+      <div class="rocket-flame"></div>
+      <svg class="rocket-svg" viewBox="0 0 100 200" xmlns="http://www.w3.org/2000/svg">
+        <path d="M30 130 L10 175 L30 165 Z" fill="#9aa3c4"/>
+        <path d="M70 130 L90 175 L70 165 Z" fill="#9aa3c4"/>
+        <defs>
+          <linearGradient id="bodyGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#d4dae8"/>
+            <stop offset="50%" stop-color="#ffffff"/>
+            <stop offset="100%" stop-color="#aab2cc"/>
+          </linearGradient>
+          <linearGradient id="noseGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#ff6b6b"/>
+            <stop offset="50%" stop-color="#ff8a65"/>
+            <stop offset="100%" stop-color="#e53935"/>
+          </linearGradient>
+        </defs>
+        <path d="M50 8 C68 28, 72 80, 72 130 L72 165 L28 165 L28 130 C28 80, 32 28, 50 8 Z" fill="url(#bodyGrad)" stroke="#8590b8" stroke-width="1"/>
+        <path d="M50 8 C68 28, 72 60, 72 80 L28 80 C28 60, 32 28, 50 8 Z" fill="url(#noseGrad)"/>
+        <circle cx="50" cy="100" r="11" fill="#0a0f22"/>
+        <circle cx="50" cy="100" r="9" fill="#4d8dff"/>
+        <circle cx="46" cy="96" r="3" fill="rgba(255,255,255,.8)"/>
+        <rect x="28" y="140" width="44" height="6" fill="#8590b8"/>
+        <rect x="28" y="120" width="44" height="2" fill="#8590b8" opacity=".4"/>
+        <rect x="28" y="160" width="44" height="2" fill="#8590b8" opacity=".4"/>
+      </svg>
+    </div>
+
+    <div class="hint">Click to launch</div>
+  </div>
+</div>
+
+<div id="smoke-layer"></div>
+<div id="smoke-wipe"></div>
+
+<!-- ============ SPACE SCREEN ============ -->
+<div id="space-screen">
+  <div class="space-head">
+    <div class="brand">
+      <div class="brand-mark">✦</div>Cosmos
+    </div>
+    <div class="space-nav">
+      <span>Drag or scroll →</span>
+      <button id="prev" aria-label="Previous">‹</button>
+      <button id="next" aria-label="Next">›</button>
+    </div>
+  </div>
+
+  <div class="wheel-title">
+    <div class="kicker">Worlds · 6 discovered</div>
+    <h1>Pick a world to explore.</h1>
+    <p>Each planet is its own destination. Click any to land there.</p>
+  </div>
+
+  <div class="wheel" id="wheel">
+
+    <div class="planet-card">
+      <div class="planet-visual-wrap">
+        <div class="planet-visual p-ignis"></div>
+      </div>
+      <div class="planet-info">
+        <div class="planet-index">⟡ 01 / Ignis</div>
+        <div class="planet-name">Ignis</div>
+        <div class="planet-desc">A molten world of endless fire. Rivers of lava carve continents of black glass.</div>
+        <a href="Planets/planet-ignis.html" class="planet-link">Land on Ignis
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </a>
+      </div>
+    </div>
+
+    <div class="planet-card">
+      <div class="planet-visual-wrap">
+        <div class="planet-visual p-aquas"></div>
+      </div>
+      <div class="planet-info">
+        <div class="planet-index">⟡ 02 / Aquas</div>
+        <div class="planet-name">Aquas</div>
+        <div class="planet-desc">Endless cyan oceans. Bioluminescent tides pulse on every shore each dusk.</div>
+        <a href="Planets/planet-aquas.html" class="planet-link">Land on Aquas
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </a>
+      </div>
+    </div>
+
+    <div class="planet-card">
+      <div class="planet-visual-wrap">
+        <div class="planet-visual p-verde"></div>
+      </div>
+      <div class="planet-info">
+        <div class="planet-index">⟡ 03 / Verde</div>
+        <div class="planet-name">Verde</div>
+        <div class="planet-desc">A living rainforest world. Canopies so dense they cast their own twilight.</div>
+        <a href="Planets/planet-verde.html" class="planet-link">Land on Verde
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </a>
+      </div>
+    </div>
+
+    <div class="planet-card">
+      <div class="planet-visual-wrap">
+        <div class="planet-rings r2"></div>
+        <div class="planet-visual p-crystal"></div>
+      </div>
+      <div class="planet-info">
+        <div class="planet-index">⟡ 04 / Crystal</div>
+        <div class="planet-name">Crystal</div>
+        <div class="planet-desc">Prismatic geodes the size of moons. Its rings catch every photon of starlight.</div>
+        <a href="Planets/planet-crystal.html" class="planet-link">Land on Crystal
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </a>
+      </div>
+    </div>
+
+    <div class="planet-card">
+      <div class="planet-visual-wrap">
+        <div class="planet-visual p-frost"></div>
+      </div>
+      <div class="planet-info">
+        <div class="planet-index">⟡ 05 / Frost</div>
+        <div class="planet-name">Frost</div>
+        <div class="planet-desc">Glaciers taller than mountains. Aurora storms dance for weeks at a time.</div>
+        <a href="Planets/planet-frost.html" class="planet-link">Land on Frost
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </a>
+      </div>
+    </div>
+
+    <div class="planet-card">
+      <div class="planet-visual-wrap">
+        <div class="planet-rings"></div>
+        <div class="planet-visual p-void"></div>
+      </div>
+      <div class="planet-info">
+        <div class="planet-index">⟡ 06 / Void</div>
+        <div class="planet-name">Void</div>
+        <div class="planet-desc">A dark cathedral of stars. Said to whisper back to those who linger too long.</div>
+        <a href="Planets/planet-void.html" class="planet-link">Land on Void
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </a>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="wheel-dots" id="dots"></div>
+</div>
+
+<script>
+  /* ===== Starfield ===== */
+  (function makeStars(){
+    const layer = document.getElementById('stars');
+    for(let i=0;i<220;i++){
+      const s = document.createElement('div');
+      s.className = 'star ' + (['s2','s2','s2','s3',''][i%5]);
+      s.style.left = Math.random()*100 + '%';
+      s.style.top = Math.random()*100 + '%';
+      s.style.animation = `twinkle ${2+Math.random()*4}s infinite ${Math.random()*4}s`;
+      layer.appendChild(s);
+    }
+  })();
+
+  /* ===== Launch sequence ===== */
+  const rocket = document.getElementById('rocket-wrap');
+  const launch = document.getElementById('launch');
+  const smokeLayer = document.getElementById('smoke-layer');
+  const smokeWipe = document.getElementById('smoke-wipe');
+  const spaceScreen = document.getElementById('space-screen');
+  let launched = false;
+
+  function blastOff(){
+    if(launched) return;
+    launched = true;
+
+    const rect = rocket.getBoundingClientRect();
+    const cx = rect.left + rect.width/2;
+    const cy = rect.bottom - 42;
+    for(let i=0;i<12;i++){
+      const puff = document.createElement('div');
+      puff.className = 'smoke' + (i<4 ? ' fire' : '');
+      const size = 60 + Math.random()*100;
+      puff.style.width = puff.style.height = size + 'px';
+      puff.style.left = (cx - size/2 + (Math.random()-.5)*60) + 'px';
+      puff.style.top = (cy - size/2 + (Math.random()-.5)*40) + 'px';
+      puff.style.animationDelay = (i*0.06) + 's';
+      puff.classList.add('active');
+      smokeLayer.appendChild(puff);
+    }
+
+    rocket.classList.add('blast');
+    setTimeout(()=>{ smokeWipe.classList.add('wipe'); }, 700);
+    setTimeout(()=>{ spaceScreen.classList.add('show'); }, 1100);
+    setTimeout(()=>{ launch.classList.add('gone'); }, 1300);
+    setTimeout(()=>{
+      smokeLayer.innerHTML = '';
+      smokeWipe.classList.remove('wipe');
+      smokeWipe.style.display = 'none';
+    }, 2400);
+  }
+
+  rocket.addEventListener('click', blastOff);
+  rocket.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' ') blastOff(); });
+
+  /* ===== Planet wheel ===== */
+  const wheel = document.getElementById('wheel');
+  const cards = [...wheel.querySelectorAll('.planet-card')];
+  const dotsWrap = document.getElementById('dots');
+
+  cards.forEach((c,i)=>{
+    const d = document.createElement('div');
+    d.className = 'dot' + (i===0?' active':'');
+    d.addEventListener('click', ()=> cards[i].scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'}));
+    dotsWrap.appendChild(d);
+  });
+  const dots = [...dotsWrap.querySelectorAll('.dot')];
+
+  function updateActive(){
+    const center = wheel.scrollLeft + wheel.clientWidth/2;
+    let nearest = 0, dist = Infinity;
+    cards.forEach((c,i)=>{
+      const cc = c.offsetLeft + c.offsetWidth/2;
+      const d = Math.abs(cc - center);
+      if(d < dist){ dist = d; nearest = i; }
+    });
+    dots.forEach((d,i)=> d.classList.toggle('active', i===nearest));
+    cards.forEach((c,i)=> c.classList.toggle('dim', i!==nearest));
+  }
+  wheel.addEventListener('scroll', ()=> requestAnimationFrame(updateActive));
+  updateActive();
+
+  document.getElementById('next').addEventListener('click', ()=>{
+    const activeIdx = dots.findIndex(d=>d.classList.contains('active'));
+    const next = Math.min(activeIdx+1, cards.length-1);
+    cards[next].scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'});
+  });
+  document.getElementById('prev').addEventListener('click', ()=>{
+    const activeIdx = dots.findIndex(d=>d.classList.contains('active'));
+    const prev = Math.max(activeIdx-1, 0);
+    cards[prev].scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'});
+  });
+
+  wheel.addEventListener('wheel', e=>{
+    if(Math.abs(e.deltaY) > Math.abs(e.deltaX)){
+      e.preventDefault();
+      wheel.scrollLeft += e.deltaY;
+    }
+  }, {passive:false});
+
+  let isDown=false, startX, startLeft;
+  wheel.addEventListener('mousedown', e=>{
+    isDown=true; startX = e.pageX; startLeft = wheel.scrollLeft; wheel.style.cursor='grabbing';
+  });
+  window.addEventListener('mouseup', ()=>{ isDown=false; wheel.style.cursor='grab'; });
+  window.addEventListener('mousemove', e=>{
+    if(!isDown) return;
+    e.preventDefault();
+    wheel.scrollLeft = startLeft - (e.pageX - startX);
+  });
+</script>
+
+</body>
+</html>
