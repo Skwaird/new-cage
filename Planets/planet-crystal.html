@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crystal — Proxy</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,700;9..144,900&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{--space:#04060f;--ink:#eef2ff;--muted:#8590b8;--accent:#9c27b0;--accent-2:#e0b3ff;--line:rgba(255,255,255,.08)}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Space Grotesk',sans-serif;background:var(--space);color:var(--ink);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+  #stars{position:fixed;inset:0;z-index:0;pointer-events:none}
+  .star{position:absolute;width:1px;height:1px;background:#fff;border-radius:50%;opacity:.4}
+  @keyframes twinkle{0%,100%{opacity:.1}50%{opacity:.6}}
+  header{position:relative;z-index:10;padding:14px 28px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);background:rgba(4,6,15,.7);backdrop-filter:blur(12px)}
+  .header-left{display:flex;align-items:center;gap:16px}
+  .back-btn{display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;background:transparent;border:1px solid var(--line);color:var(--muted);text-decoration:none;font-size:13px;transition:.2s}
+  .back-btn:hover{border-color:var(--accent);color:var(--accent)}
+  .planet-title{font-family:'Fraunces',serif;font-size:22px;font-weight:700}
+  .planet-title .dot{color:var(--accent)}
+  .url-bar{display:flex;gap:8px;align-items:center;flex:1;max-width:600px;margin:0 20px}
+  .url-bar input{flex:1;padding:10px 16px;border-radius:8px;background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--ink);font-family:inherit;font-size:14px;outline:none}
+  .url-bar input:focus{border-color:var(--accent)}
+  .url-bar button{padding:10px 18px;border-radius:8px;border:none;cursor:pointer;background:linear-gradient(135deg,var(--accent),#6a1b9a);color:#fff;font-family:inherit;font-weight:600;font-size:13px;transition:.2s}
+  .url-bar button:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(156,39,176,.3)}
+  .shortcuts{display:flex;gap:6px}
+  .shortcut{padding:6px 12px;border-radius:6px;background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--muted);text-decoration:none;font-size:12px;transition:.2s}
+  .shortcut:hover{border-color:var(--accent);color:var(--accent)}
+  #frame-wrap{position:relative;z-index:5;flex:1;display:flex;flex-direction:column}
+  #proxy-frame{flex:1;border:none;width:100%;background:#fff}
+  .loading{position:absolute;inset:0;display:none;place-items:center;background:rgba(4,6,15,.8);z-index:20}
+  .loading.show{display:grid}
+  .spinner{width:40px;height:40px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .start-screen{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--muted)}
+  .start-screen h3{font-family:'Fraunces',serif;font-size:28px;color:var(--ink);margin-bottom:8px}
+  .start-screen p{font-size:14px;max-width:360px}
+  @media(max-width:700px){.url-bar{margin:0 8px}.shortcuts{display:none}}
+</style>
+</head>
+<body>
+<div id="stars"></div>
+<header>
+  <div class="header-left">
+    <a href="../blastoff.html" class="back-btn">← Cosmos</a>
+    <div class="planet-title">Crystal<span class="dot">.</span></div>
+  </div>
+  <div class="url-bar">
+    <input id="url-input" placeholder="Enter URL (e.g. wikipedia.org)" />
+    <button id="go-btn">Go</button>
+  </div>
+  <div class="shortcuts">
+    <a class="shortcut" data-url="https://wikipedia.org">Wiki</a>
+    <a class="shortcut" data-url="https://reddit.com">Reddit</a>
+    <a class="shortcut" data-url="https://duckduckgo.com">DDG</a>
+  </div>
+</header>
+<div id="frame-wrap">
+  <div class="start-screen" id="start-screen">
+    <div>
+      <h3>Enter a URL to begin.</h3>
+      <p>The crystal refracts any site through the proxy. Type a URL above and press Go.</p>
+    </div>
+  </div>
+  <div class="loading" id="loading"><div class="spinner"></div></div>
+  <iframe id="proxy-frame" src="about:blank"></iframe>
+</div>
+<script>
+  (function(){for(let i=0;i<120;i++){const s=document.createElement('div');s.className='star';s.style.left=Math.random()*100+'%';s.style.top=Math.random()*100+'%';s.style.animation=`twinkle ${2+Math.random()*4}s infinite ${Math.random()*4}s`;document.getElementById('stars').appendChild(s)}})();
+
+  const urlInput = document.getElementById('url-input');
+  const goBtn = document.getElementById('go-btn');
+  const frame = document.getElementById('proxy-frame');
+  const loading = document.getElementById('loading');
+  const startScreen = document.getElementById('start-screen');
+
+  function normalizeUrl(input){
+    input = input.trim();
+    if(!input) return null;
+    if(!input.startsWith('http://') && !input.startsWith('https://')){
+      input = 'https://' + input;
+    }
+    return input;
+  }
+
+  function go(url){
+    const full = normalizeUrl(url);
+    if(!full) return;
+    startScreen.style.display = 'none';
+    loading.classList.add('show');
+    const proxyUrl = '/proxy?url=' + encodeURIComponent(full);
+    frame.src = proxyUrl;
+    frame.onload = ()=> loading.classList.remove('show');
+    // Fallback timeout
+    setTimeout(()=> loading.classList.remove('show'), 8000);
+  }
+
+  goBtn.addEventListener('click', ()=> go(urlInput.value));
+  urlInput.addEventListener('keydown', e=>{ if(e.key==='Enter') go(urlInput.value) });
+
+  document.querySelectorAll('.shortcut').forEach(s=>{
+    s.addEventListener('click', e=>{
+      e.preventDefault();
+      urlInput.value = s.dataset.url;
+      go(s.dataset.url);
+    });
+  });
+</script>
+</body>
+</html>
