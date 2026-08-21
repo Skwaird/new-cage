@@ -1,0 +1,16 @@
+{
+  "name": "planet-crystal-proxy",
+  "version": "1.0.0",
+  "description": "Local proxy server for Planet Crystal",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
+  }
+}

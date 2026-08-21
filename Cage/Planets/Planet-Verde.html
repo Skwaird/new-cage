@@ -51,7 +51,7 @@
 
   // ---- Feed source: pulls real posts from Reddit's public JSON API. No manual input, ever. ----
   // Change this to any subreddit and it just works.
-  const SUBREDDIT = 'FightPorn';
+  const SUBREDDIT = 'NatureIsFuckingLit';
   const SORT = 'hot'; // 'hot' | 'top' | 'new'
 
   const feed = document.getElementById('feed');
@@ -60,28 +60,15 @@
   let exhausted = false;
   let loading = false;
 
-  // Reddit's JSON endpoint sends no CORS headers, so a direct browser fetch to reddit.com
-  // gets blocked. We go through a public CORS proxy instead — and try a few, in case one
-  // is down or rate-limited at the moment.
-  const PROXIES = [
-    url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-    url => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
-    url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
-  ];
-
-  async function fetchJsonViaProxies(targetUrl){
-    let lastErr;
-    for (const buildProxyUrl of PROXIES) {
-      try {
-        const res = await fetch(buildProxyUrl(targetUrl));
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return await res.json();
-      } catch (err) {
-        lastErr = err;
-        console.warn('Proxy failed, trying next:', err);
-      }
-    }
-    throw lastErr || new Error('All proxies failed');
+  // Fetches Reddit data through our own Vercel serverless function (/api/reddit.js),
+  // which does the request server-side — no browser CORS issue, no dependency on
+  // flaky public proxies.
+  async function fetchJsonViaProxies(){
+    const params = new URLSearchParams({ subreddit: SUBREDDIT, sort: SORT });
+    if (after) params.set('after', after);
+    const res = await fetch(`/api/reddit?${params.toString()}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
   }
 
   function decode(url){ return url.replace(/&amp;/g, '&'); }
@@ -135,8 +122,7 @@
     loading = true;
     loader.style.opacity = '1';
     try {
-      const redditUrl = `https://www.reddit.com/r/${SUBREDDIT}/${SORT}.json?limit=15${after ? `&after=${after}` : ''}`;
-      const json = await fetchJsonViaProxies(redditUrl);
+      const json = await fetchJsonViaProxies();
       const children = (json && json.data && json.data.children) || [];
       after = (json && json.data && json.data.after) || null;
 
