@@ -58,13 +58,18 @@ async function assertSafeUrl(rawUrl) {
   if (net.isIP(hostname) && isPrivateOrReservedIp(hostname)) {
     throw new Error('Requests to private/internal addresses are not allowed');
   }
-  let addresses;
-  try {
-    addresses = await dns.lookup(hostname, { all: true });
-  } catch {
+  // dns.lookup() depends on the container's system resolver config, which is
+  // not always reliable in serverless sandboxes. dns.resolve4/resolve6 issue
+  // real DNS queries directly and are more consistent in that environment.
+  let addresses = [];
+  const results = await Promise.allSettled([dns.resolve4(hostname), dns.resolve6(hostname)]);
+  for (const result of results) {
+    if (result.status === 'fulfilled') addresses.push(...result.value);
+  }
+  if (addresses.length === 0) {
     throw new Error('Could not resolve host');
   }
-  if (addresses.length === 0 || addresses.some(({ address }) => isPrivateOrReservedIp(address))) {
+  if (addresses.some((address) => isPrivateOrReservedIp(address))) {
     throw new Error('Requests to private/internal addresses are not allowed');
   }
   return parsed;
@@ -117,6 +122,11 @@ function rewriteHtml(html, base) {
   // inline <style>...</style> blocks
   html = html.replace(/<style([^>]*)>([\s\S]*?)<\/style>/gi, (match, attrs, css) => {
     return `<style${attrs}>${rewriteCssUrls(css, base)}</style>`;
+  });
+
+  // inline style="..." attributes (e.g. style="background-image:url(...)")
+  html = html.replace(/\bstyle=(["'])(.*?)\1/gi, (match, quote, value) => {
+    return `style=${quote}${rewriteCssUrls(value, base)}${quote}`;
   });
 
   const origin = new URL(base).origin;
