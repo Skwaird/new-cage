@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Verde — Doomscroller</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,700;9..144,900&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{--space:#04060f;--ink:#eef2ff;--muted:#8590b8;--accent:#4caf50;--accent-2:#76e03f;--line:rgba(255,255,255,.08)}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Space Grotesk',sans-serif;background:var(--space);color:var(--ink);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+  #stars{position:fixed;inset:0;z-index:0;pointer-events:none}
+  .star{position:absolute;width:1px;height:1px;background:#fff;border-radius:50%;opacity:.4}
+  @keyframes twinkle{0%,100%{opacity:.1}50%{opacity:.6}}
+  header{position:relative;z-index:10;padding:16px 28px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);background:rgba(4,6,15,.7);backdrop-filter:blur(12px)}
+  .header-left{display:flex;align-items:center;gap:16px}
+  .back-btn{display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;background:transparent;border:1px solid var(--line);color:var(--muted);text-decoration:none;font-size:13px;transition:.2s}
+  .back-btn:hover{border-color:var(--accent);color:var(--accent)}
+  .planet-title{font-family:'Fraunces',serif;font-size:22px;font-weight:700}
+  .planet-title .dot{color:var(--accent)}
+  .scroll-hint{font-size:12px;color:var(--muted)}
+  #feed{position:relative;z-index:5;flex:1;overflow-y:scroll;scroll-snap-type:y mandatory;display:flex;flex-direction:column;align-items:center;padding:20px 0;gap:20px}
+  #feed::-webkit-scrollbar{width:0}
+  .tiktok-item{scroll-snap-align:center;flex:0 0 auto;display:flex;justify-content:center;width:100%}
+  .tiktok-embed{max-width:380px!important;min-width:325px!important;border-radius:16px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  .end-card{scroll-snap-align:center;flex:0 0 auto;display:grid;place-items:center;min-height:60vh;text-align:center;color:var(--muted)}
+  .end-card h3{font-family:'Fraunces',serif;font-size:28px;color:var(--ink);margin-bottom:8px}
+  @media(max-width:500px){.tiktok-embed{max-width:100%!important;border-radius:0}}
+</style>
+</head>
+<body>
+<div id="stars"></div>
+<header>
+  <div class="header-left">
+    <a href="../index.html" class="back-btn">← Cosmos</a>
+    <div class="planet-title">Verde<span class="dot">.</span></div>
+  </div>
+  <div class="scroll-hint">Scroll to feed your soul 🌿</div>
+</header>
+<div id="feed">
+  <!-- 
+    To add TikToks: copy the blockquote embed code from TikTok's "Embed" button.
+    Replace the data-video-id and cite URL.
+    Or just add more blockquote elements below with different video IDs.
+  -->
+  <div class="tiktok-item">
+    <blockquote class="tiktok-embed" cite="https://www.tiktok.com/@tiktok/video/7106594312292453675" data-video-id="7106594312292453675" style="max-width:380px;min-width:325px;">
+      <section><a target="_blank" href="https://www.tiktok.com/@tiktok" title="@tiktok">@tiktok</a></section>
+    </blockquote>
+  </div>
+  <div class="tiktok-item">
+    <blockquote class="tiktok-embed" cite="https://www.tiktok.com/@nature/video/7092158495213363809" data-video-id="7092158495213363809" style="max-width:380px;min-width:325px;">
+      <section><a target="_blank" href="https://www.tiktok.com/@nature" title="@nature">@nature</a></section>
+    </blockquote>
+  </div>
+  <div class="tiktok-item">
+    <blockquote class="tiktok-embed" cite="https://www.tiktok.com/@art/video/7123456789012345678" data-video-id="7123456789012345678" style="max-width:380px;min-width:325px;">
+      <section><a target="_blank" href="https://www.tiktok.com/@art" title="@art">@art</a></section>
+    </blockquote>
+  </div>
+  <div class="tiktok-item">
+    <blockquote class="tiktok-embed" cite="https://www.tiktok.com/@science/video/7134567890123456789" data-video-id="7134567890123456789" style="max-width:380px;min-width:325px;">
+      <section><a target="_blank" href="https://www.tiktok.com/@science" title="@science">@science</a></section>
+    </blockquote>
+  </div>
+  <div class="end-card">
+    <div>
+      <h3>The canopy goes quiet.</h3>
+      <p>You've reached the edge of the forest.</p>
+    </div>
+  </div>
+</div>
+<script async src="https://www.tiktok.com/embed.js"></script>
+<script>
+  (function(){for(let i=0;i<120;i++){const s=document.createElement('div');s.className='star';s.style.left=Math.random()*100+'%';s.style.top=Math.random()*100+'%';s.style.animation=`twinkle ${2+Math.random()*4}s infinite ${Math.random()*4}s`;document.getElementById('stars').appendChild(s)}})();
+</script>
+</body>
+</html>
