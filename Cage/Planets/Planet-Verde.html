@@ -21,11 +21,18 @@
   .scroll-hint{font-size:12px;color:var(--muted)}
   #feed{position:relative;z-index:5;flex:1;overflow-y:scroll;scroll-snap-type:y mandatory;display:flex;flex-direction:column;align-items:center;padding:20px 0;gap:20px}
   #feed::-webkit-scrollbar{width:0}
-  .tiktok-item{scroll-snap-align:center;flex:0 0 auto;display:flex;justify-content:center;width:100%}
-  .tiktok-embed{max-width:380px!important;min-width:325px!important;border-radius:16px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  .feed-item{scroll-snap-align:center;flex:0 0 auto;display:flex;justify-content:center;width:100%}
+  .feed-card{max-width:420px;width:90%;border-radius:16px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.5);background:#0a0e1c;border:1px solid var(--line)}
+  .feed-card img, .feed-card video{display:block;width:100%;max-height:70vh;object-fit:cover;background:#000}
+  .feed-meta{padding:12px 16px;display:flex;flex-direction:column;gap:4px}
+  .feed-meta .title{font-size:14px;line-height:1.4;color:var(--ink)}
+  .feed-meta .sub{font-size:12px;color:var(--muted);display:flex;justify-content:space-between}
+  .feed-meta .sub a{color:var(--accent-2);text-decoration:none}
+  .skeleton{max-width:420px;width:90%;height:50vh;border-radius:16px;background:linear-gradient(90deg,#0a0e1c 25%,#121834 37%,#0a0e1c 63%);background-size:400% 100%;animation:shimmer 1.4s infinite}
+  @keyframes shimmer{0%{background-position:100% 0}100%{background-position:0 0}}
   .end-card{scroll-snap-align:center;flex:0 0 auto;display:grid;place-items:center;min-height:60vh;text-align:center;color:var(--muted)}
   .end-card h3{font-family:'Fraunces',serif;font-size:28px;color:var(--ink);margin-bottom:8px}
-  @media(max-width:500px){.tiktok-embed{max-width:100%!important;border-radius:0}}
+  @media(max-width:500px){.feed-card{width:100%;border-radius:0}}
 </style>
 </head>
 <body>
@@ -37,42 +44,182 @@
   </div>
   <div class="scroll-hint">Scroll to feed your soul 🌿</div>
 </header>
-<div id="feed">
-  <!-- 
-    To add TikToks: copy the blockquote embed code from TikTok's "Embed" button.
-    Replace the data-video-id and cite URL.
-    Or just add more blockquote elements below with different video IDs.
-  -->
-  <div class="tiktok-item">
-    <blockquote class="tiktok-embed" cite="https://www.tiktok.com/@tiktok/video/7106594312292453675" data-video-id="7106594312292453675" style="max-width:380px;min-width:325px;">
-      <section><a target="_blank" href="https://www.tiktok.com/@tiktok" title="@tiktok">@tiktok</a></section>
-    </blockquote>
-  </div>
-  <div class="tiktok-item">
-    <blockquote class="tiktok-embed" cite="https://www.tiktok.com/@nature/video/7092158495213363809" data-video-id="7092158495213363809" style="max-width:380px;min-width:325px;">
-      <section><a target="_blank" href="https://www.tiktok.com/@nature" title="@nature">@nature</a></section>
-    </blockquote>
-  </div>
-  <div class="tiktok-item">
-    <blockquote class="tiktok-embed" cite="https://www.tiktok.com/@art/video/7123456789012345678" data-video-id="7123456789012345678" style="max-width:380px;min-width:325px;">
-      <section><a target="_blank" href="https://www.tiktok.com/@art" title="@art">@art</a></section>
-    </blockquote>
-  </div>
-  <div class="tiktok-item">
-    <blockquote class="tiktok-embed" cite="https://www.tiktok.com/@science/video/7134567890123456789" data-video-id="7134567890123456789" style="max-width:380px;min-width:325px;">
-      <section><a target="_blank" href="https://www.tiktok.com/@science" title="@science">@science</a></section>
-    </blockquote>
-  </div>
-  <div class="end-card">
-    <div>
-      <h3>The canopy goes quiet.</h3>
-      <p>You've reached the edge of the forest.</p>
-    </div>
-  </div>
-</div>
-<script async src="https://www.tiktok.com/embed.js"></script>
+<div id="feed"></div>
+<div id="loader" style="position:fixed;bottom:14px;left:50%;transform:translateX(-50%);z-index:20;font-size:12px;color:var(--muted);opacity:0;transition:opacity .3s;">loading more…</div>
 <script>
   (function(){for(let i=0;i<120;i++){const s=document.createElement('div');s.className='star';s.style.left=Math.random()*100+'%';s.style.top=Math.random()*100+'%';s.style.animation=`twinkle ${2+Math.random()*4}s infinite ${Math.random()*4}s`;document.getElementById('stars').appendChild(s)}})();
+
+  // ---- Feed source: pulls real posts from Reddit's public JSON API. No manual input, ever. ----
+  // Change this to any subreddit and it just works.
+  const SUBREDDIT = 'FightPorn';
+  const SORT = 'hot'; // 'hot' | 'top' | 'new'
+
+  const feed = document.getElementById('feed');
+  const loader = document.getElementById('loader');
+  let after = null;        // reddit's pagination cursor
+  let exhausted = false;
+  let loading = false;
+
+  // Reddit's JSON endpoint sends no CORS headers, so a direct browser fetch to reddit.com
+  // gets blocked. We go through a public CORS proxy instead — and try a few, in case one
+  // is down or rate-limited at the moment.
+  const PROXIES = [
+    url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+    url => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+    url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
+  ];
+
+  async function fetchJsonViaProxies(targetUrl){
+    let lastErr;
+    for (const buildProxyUrl of PROXIES) {
+      try {
+        const res = await fetch(buildProxyUrl(targetUrl));
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return await res.json();
+      } catch (err) {
+        lastErr = err;
+        console.warn('Proxy failed, trying next:', err);
+      }
+    }
+    throw lastErr || new Error('All proxies failed');
+  }
+
+  function decode(url){ return url.replace(/&amp;/g, '&'); }
+
+  function extractMedia(d){
+    if (d.over_18) return null; // keep it safe-for-work
+    if (d.is_video && d.media && d.media.reddit_video && d.media.reddit_video.fallback_url) {
+      return { type: 'video', src: decode(d.media.reddit_video.fallback_url) };
+    }
+    if (d.post_hint === 'image' && d.url) {
+      return { type: 'image', src: decode(d.url) };
+    }
+    if (d.is_gallery && d.media_metadata) {
+      const first = Object.values(d.media_metadata)[0];
+      if (first && first.s && first.s.u) return { type: 'image', src: decode(first.s.u) };
+    }
+    return null;
+  }
+
+  function renderCard(d){
+    const media = extractMedia(d);
+    if (!media) return null;
+    const wrap = document.createElement('div');
+    wrap.className = 'feed-item';
+    const mediaEl = media.type === 'video'
+      ? `<video src="${media.src}" muted loop autoplay playsinline controls></video>`
+      : `<img src="${media.src}" loading="lazy" alt="">`;
+    wrap.innerHTML = `
+      <div class="feed-card">
+        ${mediaEl}
+        <div class="feed-meta">
+          <div class="title">${d.title}</div>
+          <div class="sub">
+            <span>r/${d.subreddit} · u/${d.author}</span>
+            <a href="https://www.reddit.com${d.permalink}" target="_blank">open ↗</a>
+          </div>
+        </div>
+      </div>`;
+    return wrap;
+  }
+
+  function appendEndCard(){
+    const end = document.createElement('div');
+    end.className = 'end-card';
+    end.innerHTML = `<div><h3>The canopy goes quiet.</h3><p>You've reached the edge of the forest.</p></div>`;
+    feed.appendChild(end);
+  }
+
+  async function loadMore(){
+    if (loading || exhausted) return;
+    loading = true;
+    loader.style.opacity = '1';
+    try {
+      const redditUrl = `https://www.reddit.com/r/${SUBREDDIT}/${SORT}.json?limit=15${after ? `&after=${after}` : ''}`;
+      const json = await fetchJsonViaProxies(redditUrl);
+      const children = (json && json.data && json.data.children) || [];
+      after = (json && json.data && json.data.after) || null;
+
+      const frag = document.createDocumentFragment();
+      let added = 0;
+      children.forEach(c => {
+        const card = renderCard(c.data);
+        if (card) { frag.appendChild(card); added++; }
+      });
+      feed.appendChild(frag);
+
+      if (!after || added === 0) {
+        exhausted = true;
+        if (!feed.querySelector('.end-card')) appendEndCard();
+      }
+      observeLast();
+    } catch (err) {
+      console.error('Feed load failed', err);
+      if (!feed.querySelector('.end-card')) {
+        const errCard = document.createElement('div');
+        errCard.className = 'end-card';
+        errCard.innerHTML = `<div><h3>Signal lost.</h3><p>Couldn't reach the feed — check your connection and reload.</p></div>`;
+        feed.appendChild(errCard);
+      }
+      exhausted = true;
+    } finally {
+      loading = false;
+      setTimeout(() => { loader.style.opacity = '0'; }, 400);
+    }
+  }
+
+  // initial load
+  loadMore();
+
+  // infinite scroll: watch the last item and fetch more as it nears view
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        io.unobserve(entry.target);
+        loadMore();
+      }
+    });
+  }, { root: feed, rootMargin: '600px' });
+
+  function observeLast(){
+    const items = feed.querySelectorAll('.feed-item');
+    if (items.length) io.observe(items[items.length - 1]);
+  }
+
+  // ---- gentle auto-advance, so the feed scrolls itself like a real doomscroll ----
+  let autoTimer = null;
+  let userPaused = false;
+  let pauseResumeTimer = null;
+
+  function scrollToNext(){
+    const items = Array.from(feed.querySelectorAll('.feed-item, .end-card'));
+    const feedTop = feed.scrollTop;
+    const next = items.find(el => el.offsetTop > feedTop + 20);
+    if (next) {
+      feed.scrollTo({ top: next.offsetTop, behavior: 'smooth' });
+    }
+  }
+
+  function startAutoScroll(){
+    stopAutoScroll();
+    autoTimer = setInterval(() => {
+      if (!userPaused) scrollToNext();
+    }, 6000);
+  }
+  function stopAutoScroll(){
+    if (autoTimer) clearInterval(autoTimer);
+  }
+
+  function markUserActive(){
+    userPaused = true;
+    clearTimeout(pauseResumeTimer);
+    pauseResumeTimer = setTimeout(() => { userPaused = false; }, 8000);
+  }
+  feed.addEventListener('wheel', markUserActive, { passive: true });
+  feed.addEventListener('touchstart', markUserActive, { passive: true });
+  feed.addEventListener('touchmove', markUserActive, { passive: true });
+
+  startAutoScroll();
 </script>
 </body>
 </html>

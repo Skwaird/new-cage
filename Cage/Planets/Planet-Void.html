@@ -221,6 +221,65 @@
   .empty-state h3{font-family:'Fraunces',serif;font-size:24px;font-weight:600;color:var(--ink);margin-bottom:8px}
   .empty-state p{font-size:14px;max-width:360px;margin:0 auto}
 
+  #admin-overlay{
+    position:fixed;inset:0;z-index:100;
+    background:rgba(4,6,15,.75);
+    backdrop-filter:blur(6px);
+    display:none;align-items:center;justify-content:center;
+  }
+  #admin-overlay.show{display:flex}
+  #admin-panel{
+    width:360px;max-width:90vw;max-height:80vh;overflow-y:auto;
+    background:var(--space-2);
+    border:1px solid rgba(167,139,250,.3);
+    border-radius:14px;
+    box-shadow:0 20px 60px rgba(0,0,0,.6), 0 0 0 1px rgba(167,139,250,.05);
+    padding:22px;
+  }
+  #admin-panel h3{
+    font-family:'Fraunces',serif;font-size:18px;margin-bottom:4px;color:var(--accent-2);
+  }
+  #admin-panel .sub{font-size:12px;color:var(--muted);margin-bottom:16px}
+  #admin-panel input[type=password], #admin-panel input[type=text]{
+    width:100%;padding:10px 12px;border-radius:8px;
+    background:rgba(255,255,255,.04);border:1px solid var(--line);
+    color:var(--ink);font-family:inherit;font-size:13px;outline:none;
+    margin-bottom:10px;
+  }
+  #admin-panel input:focus{border-color:var(--accent)}
+  #admin-panel .row{display:flex;gap:8px}
+  #admin-panel button{
+    padding:9px 14px;border-radius:8px;border:none;cursor:pointer;
+    font-family:inherit;font-size:12px;font-weight:600;
+    background:linear-gradient(135deg,var(--accent),#7c3aed);color:#fff;
+    transition:.2s;
+  }
+  #admin-panel button:hover{transform:translateY(-1px)}
+  #admin-panel button.secondary{
+    background:transparent;border:1px solid var(--line);color:var(--muted);
+  }
+  #admin-panel button.danger{
+    background:linear-gradient(135deg,#ff6b6b,#c0392b);
+  }
+  #admin-error{color:var(--warn);font-size:12px;margin:-4px 0 10px;display:none}
+  #admin-error.show{display:block}
+  .admin-close{
+    float:right;background:none;border:none;color:var(--muted);
+    font-size:16px;cursor:pointer;padding:0 4px;
+  }
+  .admin-section{margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}
+  .admin-section h4{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:8px}
+  .admin-user-list{display:flex;flex-direction:column;gap:6px;max-height:120px;overflow-y:auto}
+  .admin-user-row{
+    display:flex;align-items:center;justify-content:between;gap:8px;
+    padding:6px 10px;border-radius:6px;background:rgba(255,255,255,.03);
+    font-size:12px;
+  }
+  .admin-user-row span{flex:1;font-family:'Fraunces',serif;color:var(--accent)}
+  .admin-user-row button{padding:4px 8px;font-size:11px}
+  .admin-empty{font-size:11px;color:var(--muted);font-style:italic}
+  .msg.muted-notice{display:none}
+
   @media(max-width:600px){
     header{padding:12px 16px;flex-wrap:wrap;gap:8px}
     .void-title{font-size:18px}
@@ -270,6 +329,50 @@
     <div class="typing-dot"></div>
     <div class="typing-dot"></div>
     <div class="typing-dot"></div>
+  </div>
+</div>
+
+<div id="admin-overlay">
+  <div id="admin-panel">
+    <button class="admin-close" id="admin-close">&times;</button>
+    <h3>Void Control</h3>
+    <div class="sub">Restricted access. Shift+A to toggle.</div>
+
+    <div id="admin-login">
+      <input type="password" id="admin-password" placeholder="Password" autocomplete="off">
+      <div id="admin-error">Incorrect password.</div>
+      <button id="admin-submit">Unlock</button>
+    </div>
+
+    <div id="admin-controls" style="display:none">
+      <div class="admin-section" style="margin-top:0;padding-top:0;border-top:none">
+        <h4>Take Action</h4>
+        <input type="text" id="admin-target" placeholder="Username">
+        <div class="row">
+          <button id="admin-mute-btn">Mute</button>
+          <button id="admin-ban-btn" class="danger">Ban</button>
+        </div>
+      </div>
+
+      <div class="admin-section">
+        <h4>Seen in this session</h4>
+        <div class="admin-user-list" id="admin-seen-list"></div>
+      </div>
+
+      <div class="admin-section">
+        <h4>Muted</h4>
+        <div class="admin-user-list" id="admin-muted-list"></div>
+      </div>
+
+      <div class="admin-section">
+        <h4>Banned</h4>
+        <div class="admin-user-list" id="admin-banned-list"></div>
+      </div>
+
+      <div class="admin-section">
+        <button class="secondary" id="admin-lock-btn">Lock panel</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -338,6 +441,148 @@
     hasChatted = true;
     usernameBadge.classList.add('locked');
     regenBtn.classList.add('hidden');
+  }
+
+  /* ===== Admin panel ===== */
+  const ADMIN_PASSWORD = 'SKW@1RDO';
+  let adminUnlocked = false;
+  const seenUsers = new Set();
+  const mutedUsers = new Set();
+  const bannedUsers = new Set();
+
+  const adminOverlay = document.getElementById('admin-overlay');
+  const adminLogin = document.getElementById('admin-login');
+  const adminControls = document.getElementById('admin-controls');
+  const adminPasswordInput = document.getElementById('admin-password');
+  const adminError = document.getElementById('admin-error');
+  const adminTarget = document.getElementById('admin-target');
+  const adminSeenList = document.getElementById('admin-seen-list');
+  const adminMutedList = document.getElementById('admin-muted-list');
+  const adminBannedList = document.getElementById('admin-banned-list');
+
+  function openAdminPanel(){
+    adminOverlay.classList.add('show');
+    if(adminUnlocked){
+      adminLogin.style.display = 'none';
+      adminControls.style.display = 'block';
+      renderAdminLists();
+    } else {
+      adminLogin.style.display = 'block';
+      adminControls.style.display = 'none';
+      adminPasswordInput.value = '';
+      adminError.classList.remove('show');
+      setTimeout(()=> adminPasswordInput.focus(), 50);
+    }
+  }
+
+  function closeAdminPanel(){
+    adminOverlay.classList.remove('show');
+  }
+
+  document.addEventListener('keydown', (e)=>{
+    const typingInField = e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT';
+    if(e.shiftKey && e.key === 'A' && !typingInField){
+      e.preventDefault();
+      if(adminOverlay.classList.contains('show')) closeAdminPanel();
+      else openAdminPanel();
+    }
+    if(e.key === 'Escape' && adminOverlay.classList.contains('show')){
+      closeAdminPanel();
+    }
+  });
+
+  document.getElementById('admin-close').addEventListener('click', closeAdminPanel);
+  document.getElementById('admin-lock-btn').addEventListener('click', ()=>{
+    adminUnlocked = false;
+    closeAdminPanel();
+  });
+
+  document.getElementById('admin-submit').addEventListener('click', tryAdminLogin);
+  adminPasswordInput.addEventListener('keydown', (e)=>{
+    if(e.key === 'Enter') tryAdminLogin();
+  });
+
+  function tryAdminLogin(){
+    if(adminPasswordInput.value === ADMIN_PASSWORD){
+      adminUnlocked = true;
+      adminLogin.style.display = 'none';
+      adminControls.style.display = 'block';
+      renderAdminLists();
+    } else {
+      adminError.classList.add('show');
+      adminPasswordInput.value = '';
+    }
+  }
+
+  function renderAdminLists(){
+    renderUserList(adminSeenList, [...seenUsers], (u)=> u !== myUsername, (u)=>[
+      {label:'Mute', cls:'', action:()=>adminMute(u)},
+      {label:'Ban', cls:'danger', action:()=>adminBan(u)}
+    ]);
+    renderUserList(adminMutedList, [...mutedUsers], ()=>true, (u)=>[
+      {label:'Unmute', cls:'secondary', action:()=>adminUnmute(u)}
+    ]);
+    renderUserList(adminBannedList, [...bannedUsers], ()=>true, (u)=>[
+      {label:'Unban', cls:'secondary', action:()=>adminUnban(u)}
+    ]);
+  }
+
+  function renderUserList(container, users, filterFn, actionsFn){
+    container.innerHTML = '';
+    const filtered = users.filter(filterFn);
+    if(filtered.length === 0){
+      const empty = document.createElement('div');
+      empty.className = 'admin-empty';
+      empty.textContent = 'None';
+      container.appendChild(empty);
+      return;
+    }
+    filtered.forEach(u=>{
+      const row = document.createElement('div');
+      row.className = 'admin-user-row';
+      const span = document.createElement('span');
+      span.textContent = u;
+      row.appendChild(span);
+      actionsFn(u).forEach(a=>{
+        const btn = document.createElement('button');
+        if(a.cls) btn.className = a.cls;
+        btn.textContent = a.label;
+        btn.addEventListener('click', a.action);
+        row.appendChild(btn);
+      });
+      container.appendChild(row);
+    });
+  }
+
+  function broadcastAdminAction(action, target){
+    const payload = { type:'admin', action, target, by:myUsername, timestamp:Date.now() };
+    fetch(`https://ntfy.sh/${TOPIC}`, {
+      method:'POST',
+      body: JSON.stringify(payload)
+    }).catch(()=>{});
+  }
+
+  function adminMute(u){ mutedUsers.add(u); broadcastAdminAction('mute', u); renderAdminLists(); }
+  function adminUnmute(u){ mutedUsers.delete(u); broadcastAdminAction('unmute', u); renderAdminLists(); }
+  function adminBan(u){ bannedUsers.add(u); mutedUsers.delete(u); broadcastAdminAction('ban', u); renderAdminLists(); }
+  function adminUnban(u){ bannedUsers.delete(u); broadcastAdminAction('unban', u); renderAdminLists(); }
+
+  document.getElementById('admin-mute-btn').addEventListener('click', ()=>{
+    const u = adminTarget.value.trim();
+    if(u){ adminMute(u); adminTarget.value=''; }
+  });
+  document.getElementById('admin-ban-btn').addEventListener('click', ()=>{
+    const u = adminTarget.value.trim();
+    if(u){ adminBan(u); adminTarget.value=''; }
+  });
+
+  function handleAdminMessage(payload){
+    const { action, target } = payload;
+    if(action === 'mute') mutedUsers.add(target);
+    if(action === 'unmute') mutedUsers.delete(target);
+    if(action === 'ban') { bannedUsers.add(target); mutedUsers.delete(target); }
+    if(action === 'unban') bannedUsers.delete(target);
+    if(adminOverlay.classList.contains('show') && adminUnlocked) renderAdminLists();
   }
 
   /* ===== Profanity & content filter ===== */
@@ -474,14 +719,23 @@
         if(data.event !== 'message' || !data.message) return;
 
         const payload = JSON.parse(data.message);
+
+        if(payload.type === 'admin'){
+          handleAdminMessage(payload);
+          return;
+        }
+
         if(!payload.user || !payload.text) return;
 
+        if(bannedUsers.has(payload.user)) return;
+
         if(payload.type === 'typing'){
-          showTyping(payload.user);
+          if(!mutedUsers.has(payload.user)) showTyping(payload.user);
           return;
         }
 
         hideTyping();
+        if(mutedUsers.has(payload.user)) return;
         addMessage(payload.user, payload.text, payload.timestamp, payload.user === myUsername);
       } catch(e) {}
     };
@@ -505,6 +759,11 @@
   function sendMessage(){
     const text = input.value.trim();
     if(!text || !connected) return;
+
+    if(bannedUsers.has(myUsername)){
+      showBlockedWarning('you have been banned from this room');
+      return;
+    }
 
     // Check for blocked content
     const blocked = findBlockedContent(text);
@@ -531,6 +790,8 @@
   }
 
   function addMessage(user, text, timestamp, isSelf){
+    seenUsers.add(user);
+    if(adminOverlay.classList.contains('show') && adminUnlocked) renderAdminLists();
     if(emptyState) emptyState.style.display = 'none';
 
     const msg = document.createElement('div');
@@ -562,7 +823,11 @@
   function showBlockedWarning(reason){
     const msg = document.createElement('div');
     msg.className = 'msg blocked';
-    msg.textContent = `Message blocked: contains ${reason === 'website link' ? 'a website link' : 'restricted language'}`;
+    let text;
+    if(reason === 'website link') text = 'Message blocked: contains a website link';
+    else if(reason === 'you have been banned from this room') text = 'Message blocked: you have been banned from this room';
+    else text = 'Message blocked: contains restricted language';
+    msg.textContent = text;
     chat.insertBefore(msg, typing);
     chat.scrollTop = chat.scrollHeight;
 
