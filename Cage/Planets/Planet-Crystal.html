@@ -66,6 +66,15 @@
   <iframe id="proxy-frame" src="about:blank"></iframe>
 </div>
 <script>
+  // This page should only ever be opened directly by a person, never inside
+  // a frame. If something (a script on a proxied page, a stray relative
+  // redirect, etc.) tries to load this page nested inside its own proxy
+  // iframe, stop immediately instead of letting it nest indefinitely.
+  if (window.top !== window.self) {
+    document.documentElement.innerHTML = '<body style="margin:0;display:grid;place-items:center;height:100vh;background:#04060f;color:#eef2ff;font-family:sans-serif;text-align:center;padding:20px"><p>This page can\u2019t be displayed inside a frame.</p></body>';
+    throw new Error('Blocked: refusing to render inside an iframe');
+  }
+
   (function(){for(let i=0;i<120;i++){const s=document.createElement('div');s.className='star';s.style.left=Math.random()*100+'%';s.style.top=Math.random()*100+'%';s.style.animation=`twinkle ${2+Math.random()*4}s infinite ${Math.random()*4}s`;document.getElementById('stars').appendChild(s)}})();
 
   const urlInput = document.getElementById('url-input');
