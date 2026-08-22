@@ -129,11 +129,13 @@ function rewriteHtml(html, base) {
     return `style=${quote}${rewriteCssUrls(value, base)}${quote}`;
   });
 
-  const origin = new URL(base).origin;
-
-  // Base tag so any remaining relative URL we didn't catch still resolves
-  // sensibly, and a style reset to keep proxied pages readable.
-  html = html.replace(/<head([^>]*)>/i, `<head$1><base href="${origin}/">`);
+  // A style reset to keep proxied pages readable. (We intentionally do NOT
+  // inject a <base> tag here: since every href/src/action/srcset and CSS
+  // url() is already rewritten above into a fully-qualified /proxy?url=...
+  // path, a <base> pointing at the target site's origin would actually
+  // hijack those already-correct absolute paths - browsers resolve any
+  // leading-slash URL against <base>'s origin, so links/forms would resolve
+  // straight to the real site instead of back through our proxy.)
   html = html.replace(/<\/head>/i, '<style>body{background:#fff !important}</style></head>');
 
   return html;
