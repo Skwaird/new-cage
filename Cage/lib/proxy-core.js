@@ -169,6 +169,21 @@ async function runProxy(req, res) {
     return res.status(400).send(`Proxy error: ${err.message}`);
   }
 
+  // A GET form submission appends its fields (e.g. q=search+term) to the
+  // outer request's query string, alongside our target/url param - it can't
+  // touch the path, but it also isn't inside the encoded target URL, since
+  // that was fixed at page-render time before the user typed anything. Merge
+  // those extra params onto the real target URL so the search term (etc.)
+  // actually reaches the origin site.
+  for (const [key, value] of Object.entries(req.query || {})) {
+    if (key === 'target' || key === 'url') continue;
+    if (Array.isArray(value)) {
+      value.forEach((v) => safeUrl.searchParams.append(key, v));
+    } else if (typeof value === 'string') {
+      safeUrl.searchParams.append(key, value);
+    }
+  }
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
