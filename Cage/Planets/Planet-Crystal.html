@@ -58,8 +58,8 @@
 <div id="frame-wrap">
   <div class="start-screen" id="start-screen">
     <div>
-      <h3>Enter a URL to begin.</h3>
-      <p>The crystal refracts any site through the proxy. Type a URL above and press Go.</p>
+      <h3 id="start-heading">Enter a URL to begin.</h3>
+      <p id="start-text">The crystal refracts any site through the proxy. Type a URL above and press Go.</p>
     </div>
   </div>
   <div class="loading" id="loading"><div class="spinner"></div></div>
@@ -73,26 +73,61 @@
   const frame = document.getElementById('proxy-frame');
   const loading = document.getElementById('loading');
   const startScreen = document.getElementById('start-screen');
+  const startHeading = document.getElementById('start-heading');
+  const startText = document.getElementById('start-text');
 
+  let fallbackTimer = null;
+
+  // Only allow http/https (and bare hostnames, which get https:// prepended).
+  // Blocks things like javascript:, data:, file:, etc. from ever reaching
+  // the iframe or the proxy endpoint.
   function normalizeUrl(input){
-    input = input.trim();
+    input = (input || '').trim();
     if(!input) return null;
-    if(!input.startsWith('http://') && !input.startsWith('https://')){
+
+    if(/^[a-z][a-z0-9+.-]*:/i.test(input)){
+      if(!/^https?:\/\//i.test(input)) return null; // reject non-http(s) schemes
+    } else {
       input = 'https://' + input;
     }
-    return input;
+
+    try {
+      const parsed = new URL(input);
+      if(parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+      if(!parsed.hostname) return null;
+      return parsed.toString();
+    } catch {
+      return null;
+    }
   }
 
-  function go(url){
-    const full = normalizeUrl(url);
-    if(!full) return;
+  function showError(message){
+    loading.classList.remove('show');
+    startHeading.textContent = 'Couldn\u2019t load that.';
+    startText.textContent = message;
+    startScreen.style.display = 'grid';
+  }
+
+  function go(rawUrl){
+    const full = normalizeUrl(rawUrl);
+    if(!full){
+      showError('Enter a valid http:// or https:// URL.');
+      return;
+    }
+
+    if(fallbackTimer) clearTimeout(fallbackTimer);
+
     startScreen.style.display = 'none';
     loading.classList.add('show');
-    const proxyUrl = '/proxy?url=' + encodeURIComponent(full);
+
+    const proxyUrl = '/proxy/' + encodeURIComponent(full);
+
+    frame.onload = () => loading.classList.remove('show');
+    frame.onerror = () => showError('The page failed to load.');
     frame.src = proxyUrl;
-    frame.onload = ()=> loading.classList.remove('show');
-    // Fallback timeout
-    setTimeout(()=> loading.classList.remove('show'), 8000);
+
+    // Fallback in case onload never fires (e.g. network hang)
+    fallbackTimer = setTimeout(() => loading.classList.remove('show'), 8000);
   }
 
   goBtn.addEventListener('click', ()=> go(urlInput.value));

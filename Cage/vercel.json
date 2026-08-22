@@ -1,6 +1,7 @@
 {
   "cleanUrls": true,
   "rewrites": [
+    { "source": "/proxy/:target", "destination": "/api/proxy?target=:target" },
     { "source": "/proxy", "destination": "/api/proxy" }
   ]
 }

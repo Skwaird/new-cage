@@ -85,7 +85,7 @@ function toProxyUrl(rawValue, base) {
   if (/^(javascript:|data:|mailto:|tel:|#)/i.test(trimmed)) return rawValue;
   try {
     const abs = new URL(trimmed, base).toString();
-    return `/proxy?url=${encodeURIComponent(abs)}`;
+    return `/proxy/${encodeURIComponent(abs)}`;
   } catch {
     return rawValue;
   }
@@ -152,7 +152,12 @@ function rewriteHtml(html, base) {
 // ---------------------------------------------------------------------------
 
 async function runProxy(req, res) {
-  const targetUrl = req.query.url;
+  // Path-based target (/proxy/<encoded-url>) survives GET form submissions,
+  // which overwrite query strings but can't touch the path. req.params.target
+  // covers Express (server.js); req.query.target covers the Vercel rewrite
+  // (/proxy/:target -> /api/proxy?target=:target). req.query.url is kept as
+  // a fallback for anything still using the old query-string format.
+  const targetUrl = (req.params && req.params.target) || req.query.target || req.query.url;
   if (!targetUrl) {
     return res.status(400).send('Missing url parameter');
   }
