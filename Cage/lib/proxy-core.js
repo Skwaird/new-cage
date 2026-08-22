@@ -169,6 +169,21 @@ async function runProxy(req, res) {
     return res.status(400).send(`Proxy error: ${err.message}`);
   }
 
+  // Refuse to proxy our own domain. Whatever the trigger (a frame-busting
+  // script on the target site, an ad redirect chain, a relative link we
+  // missed) if a target URL ever points back at us, fetching it would just
+  // wrap our own site in our own proxy again - and if that page contains the
+  // same trigger, it repeats indefinitely. Rejecting it here closes that off
+  // at the source instead of relying on catching every possible cause.
+  const requestHost = (req.headers.host || req.headers['x-forwarded-host'] || '')
+    .toString()
+    .toLowerCase()
+    .split(':')[0];
+  const targetHost = safeUrl.hostname.toLowerCase();
+  if (requestHost && targetHost === requestHost) {
+    return res.status(400).send('Proxy error: refusing to proxy this site through itself');
+  }
+
   // A GET form submission appends its fields (e.g. q=search+term) to the
   // outer request's query string, alongside our target/url param - it can't
   // touch the path, but it also isn't inside the encoded target URL, since
